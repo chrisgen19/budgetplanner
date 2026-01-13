@@ -12,3 +12,17 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+model BudgetItem {
+  id           String   @id @default(cuid())
+  type         String   // "income" | "expense"
+  name         String
+  amount       Float
+  category     String
+  frequency    String   // "one-time" | "daily" | "weekly" | "monthly"
+  startDate    String   // YYYY-MM-DD format
+  endDate      String?  // Optional end date
+  selectedDays Int[]    // For weekly frequency (0-6 for Sun-Sat)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
