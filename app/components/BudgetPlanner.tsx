@@ -9,6 +9,7 @@ import {
   X,
   Calendar as CalendarIcon,
   TrendingUp,
+  TrendingDown,
   PieChart,
   Trash2,
   Pencil,
@@ -18,7 +19,9 @@ import {
   ArrowUpCircle,
   PiggyBank,
   LogOut,
-  User
+  User,
+  DollarSign,
+  Target
 } from 'lucide-react'
 
 interface AuthUser {
@@ -348,6 +351,11 @@ export default function BudgetPlanner() {
   const currentMonthExpense = monthlyStats.expense[currentMonthIndex]
   const currentMonthSavings = monthlyStats.savings[currentMonthIndex]
 
+  // Yearly totals
+  const yearlyIncome = monthlyStats.income.reduce((sum, val) => sum + val, 0)
+  const yearlyExpense = monthlyStats.expense.reduce((sum, val) => sum + val, 0)
+  const yearlySavings = yearlyIncome - yearlyExpense
+
   // Helper to get color style based on category & type
   const getCategoryStyle = (catName: string, type: string) => {
     if (type === 'income') {
@@ -559,6 +567,81 @@ export default function BudgetPlanner() {
                  </div>
                </>
              )}
+          </div>
+        </div>
+
+        {/* Analytics Cards - Yearly Forecast */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Card 4: Yearly Income Forecast */}
+          <div className="relative overflow-hidden bg-white rounded-3xl p-6 shadow-sm border border-slate-100 hover:shadow-md transition-shadow group">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-teal-50 rounded-full translate-x-8 -translate-y-8 opacity-50 group-hover:scale-110 transition-transform"></div>
+            <div className="flex justify-between items-start mb-4 relative z-10">
+              <div className="p-3 bg-teal-50 rounded-2xl text-teal-600">
+                <TrendingUp size={24} />
+              </div>
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 bg-slate-50 px-2 py-1 rounded-md">
+                2026
+              </span>
+            </div>
+            <div className="relative z-10">
+              <div className="text-3xl font-extrabold text-slate-900 mb-1">{formatCurrency(yearlyIncome)}</div>
+              <p className="text-teal-600 text-sm font-medium">Yearly Income Forecast</p>
+            </div>
+          </div>
+
+          {/* Card 5: Yearly Expense Forecast */}
+          <div className="relative overflow-hidden bg-white rounded-3xl p-6 shadow-sm border border-slate-100 hover:shadow-md transition-shadow group">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-orange-50 rounded-full translate-x-8 -translate-y-8 opacity-50 group-hover:scale-110 transition-transform"></div>
+            <div className="flex justify-between items-start mb-4 relative z-10">
+              <div className="p-3 bg-orange-50 rounded-2xl text-orange-600">
+                <DollarSign size={24} />
+              </div>
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 bg-slate-50 px-2 py-1 rounded-md">
+                2026
+              </span>
+            </div>
+            <div className="relative z-10">
+              <div className="text-3xl font-extrabold text-slate-900 mb-1">{formatCurrency(yearlyExpense)}</div>
+              <p className="text-orange-600 text-sm font-medium">Yearly Expense Forecast</p>
+            </div>
+          </div>
+
+          {/* Card 6: Yearly Net Savings */}
+          <div className={`
+            relative overflow-hidden rounded-3xl p-6 shadow-sm border transition-shadow group
+            ${yearlySavings >= 0 ? 'bg-gradient-to-br from-violet-600 to-purple-700 text-white border-violet-500' : 'bg-white border-slate-100'}
+          `}>
+            {yearlySavings >= 0 ? (
+              // Positive State
+              <>
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full translate-x-10 -translate-y-10"></div>
+                <div className="flex justify-between items-start mb-4 relative z-10">
+                  <div className="p-3 bg-white/20 rounded-2xl text-white">
+                    <Target size={24} />
+                  </div>
+                  <span className="text-xs font-bold uppercase tracking-wider text-violet-200 bg-violet-800/30 px-2 py-1 rounded-md">2026</span>
+                </div>
+                <div className="relative z-10">
+                  <div className="text-3xl font-extrabold mb-1">{formatCurrency(yearlySavings)}</div>
+                  <p className="text-violet-100 text-sm font-medium">Yearly Net Savings</p>
+                </div>
+              </>
+            ) : (
+              // Negative State
+              <>
+                <div className="absolute top-0 right-0 w-32 h-32 bg-red-50 rounded-full translate-x-10 -translate-y-10"></div>
+                <div className="flex justify-between items-start mb-4 relative z-10">
+                  <div className="p-3 bg-red-50 rounded-2xl text-red-600">
+                    <TrendingDown size={24} />
+                  </div>
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400 bg-slate-50 px-2 py-1 rounded-md">2026</span>
+                </div>
+                <div className="relative z-10">
+                  <div className="text-3xl font-extrabold text-red-600 mb-1">{formatCurrency(yearlySavings)}</div>
+                  <p className="text-red-400 text-sm font-medium">Yearly Deficit</p>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
