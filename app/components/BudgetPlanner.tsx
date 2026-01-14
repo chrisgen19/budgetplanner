@@ -23,8 +23,10 @@ import {
   DollarSign,
   Target,
   BarChart3,
-  Layers
+  Layers,
+  Settings
 } from 'lucide-react'
+import Link from 'next/link'
 
 interface AuthUser {
   id: string
@@ -527,6 +529,13 @@ export default function BudgetPlanner() {
                 <User size={16} className="text-slate-500" />
                 <span className="text-sm font-medium text-slate-700">{user.name}</span>
               </div>
+              <Link
+                href="/settings"
+                className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors"
+                title="Settings"
+              >
+                <Settings size={18} />
+              </Link>
               <button
                 onClick={handleLogout}
                 className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-colors"

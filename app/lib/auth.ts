@@ -5,7 +5,7 @@ const SALT_ROUNDS = 10
 const SESSION_EXPIRY_DAYS = 7
 
 // Simple hash function using Web Crypto API (works in Edge runtime)
-async function hashPassword(password: string): Promise<string> {
+export async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder()
   const data = encoder.encode(password)
   const hashBuffer = await crypto.subtle.digest('SHA-256', data)
@@ -14,7 +14,7 @@ async function hashPassword(password: string): Promise<string> {
   return hashHex
 }
 
-async function verifyPassword(password: string, hash: string): Promise<boolean> {
+export async function verifyPassword(password: string, hash: string): Promise<boolean> {
   const passwordHash = await hashPassword(password)
   return passwordHash === hash
 }
