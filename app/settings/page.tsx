@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -11,7 +11,13 @@ import {
   EyeOff,
   Loader2,
   Check,
-  Wallet
+  Wallet,
+  Plus,
+  Pencil,
+  Trash2,
+  X,
+  ArrowUpCircle,
+  ArrowDownCircle
 } from 'lucide-react'
 
 interface AuthUser {
@@ -20,7 +26,39 @@ interface AuthUser {
   name: string
 }
 
+interface Category {
+  id: string
+  name: string
+  type: 'income' | 'expense'
+  color: string
+  isDefault: boolean
+  order: number
+}
+
 type TabType = 'profile' | 'categories'
+
+// Available colors for categories
+const CATEGORY_COLORS = [
+  { name: 'indigo', bg: 'bg-indigo-100', text: 'text-indigo-700', dot: 'bg-indigo-500' },
+  { name: 'emerald', bg: 'bg-emerald-100', text: 'text-emerald-700', dot: 'bg-emerald-500' },
+  { name: 'rose', bg: 'bg-rose-100', text: 'text-rose-700', dot: 'bg-rose-500' },
+  { name: 'orange', bg: 'bg-orange-100', text: 'text-orange-700', dot: 'bg-orange-500' },
+  { name: 'amber', bg: 'bg-amber-100', text: 'text-amber-700', dot: 'bg-amber-500' },
+  { name: 'cyan', bg: 'bg-cyan-100', text: 'text-cyan-700', dot: 'bg-cyan-500' },
+  { name: 'teal', bg: 'bg-teal-100', text: 'text-teal-700', dot: 'bg-teal-500' },
+  { name: 'green', bg: 'bg-green-100', text: 'text-green-700', dot: 'bg-green-500' },
+  { name: 'lime', bg: 'bg-lime-100', text: 'text-lime-700', dot: 'bg-lime-500' },
+  { name: 'purple', bg: 'bg-purple-100', text: 'text-purple-700', dot: 'bg-purple-500' },
+  { name: 'pink', bg: 'bg-pink-100', text: 'text-pink-700', dot: 'bg-pink-500' },
+  { name: 'slate', bg: 'bg-slate-100', text: 'text-slate-700', dot: 'bg-slate-500' },
+  { name: 'gray', bg: 'bg-gray-100', text: 'text-gray-700', dot: 'bg-gray-500' },
+  { name: 'red', bg: 'bg-red-100', text: 'text-red-700', dot: 'bg-red-500' },
+  { name: 'blue', bg: 'bg-blue-100', text: 'text-blue-700', dot: 'bg-blue-500' },
+]
+
+const getColorStyle = (colorName: string) => {
+  return CATEGORY_COLORS.find(c => c.name === colorName) || CATEGORY_COLORS[0]
+}
 
 export default function SettingsPage() {
   const router = useRouter()
@@ -48,6 +86,19 @@ export default function SettingsPage() {
   const [profileError, setProfileError] = useState('')
   const [passwordError, setPasswordError] = useState('')
 
+  // Categories state
+  const [categories, setCategories] = useState<Category[]>([])
+  const [categoriesLoading, setCategoriesLoading] = useState(true)
+  const [categoryModal, setCategoryModal] = useState(false)
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null)
+  const [categoryForm, setCategoryForm] = useState({
+    name: '',
+    type: 'expense' as 'income' | 'expense',
+    color: 'indigo',
+  })
+  const [categoryError, setCategoryError] = useState('')
+  const [categorySaving, setCategorySaving] = useState(false)
+
   // Auth check
   useEffect(() => {
     const checkAuth = async () => {
@@ -71,6 +122,36 @@ export default function SettingsPage() {
     }
     checkAuth()
   }, [router])
+
+  // Fetch categories
+  const fetchCategories = useCallback(async () => {
+    try {
+      const response = await fetch('/api/categories')
+      if (response.ok) {
+        const data = await response.json()
+        setCategories(data)
+
+        // If no categories exist, seed default ones
+        if (data.length === 0) {
+          const seedResponse = await fetch('/api/categories/seed', { method: 'POST' })
+          if (seedResponse.ok) {
+            const seededData = await seedResponse.json()
+            setCategories(seededData)
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error)
+    } finally {
+      setCategoriesLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (user) {
+      fetchCategories()
+    }
+  }, [user, fetchCategories])
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -151,6 +232,63 @@ export default function SettingsPage() {
     }
   }
 
+  const openAddCategoryModal = (type: 'income' | 'expense') => {
+    setEditingCategory(null)
+    setCategoryForm({ name: '', type, color: type === 'income' ? 'emerald' : 'indigo' })
+    setCategoryError('')
+    setCategoryModal(true)
+  }
+
+  const openEditCategoryModal = (category: Category) => {
+    setEditingCategory(category)
+    setCategoryForm({ name: category.name, type: category.type, color: category.color })
+    setCategoryError('')
+    setCategoryModal(true)
+  }
+
+  const handleCategorySubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setCategoryError('')
+    setCategorySaving(true)
+
+    try {
+      const url = editingCategory ? `/api/categories/${editingCategory.id}` : '/api/categories'
+      const method = editingCategory ? 'PUT' : 'POST'
+
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(categoryForm),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to save category')
+      }
+
+      await fetchCategories()
+      setCategoryModal(false)
+    } catch (err) {
+      setCategoryError(err instanceof Error ? err.message : 'Failed to save category')
+    } finally {
+      setCategorySaving(false)
+    }
+  }
+
+  const handleDeleteCategory = async (category: Category) => {
+    if (!confirm(`Are you sure you want to delete "${category.name}"?`)) return
+
+    try {
+      const response = await fetch(`/api/categories/${category.id}`, { method: 'DELETE' })
+      if (response.ok) {
+        await fetchCategories()
+      }
+    } catch (error) {
+      console.error('Error deleting category:', error)
+    }
+  }
+
   if (!authChecked || !user) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -158,6 +296,9 @@ export default function SettingsPage() {
       </div>
     )
   }
+
+  const expenseCategories = categories.filter(c => c.type === 'expense')
+  const incomeCategories = categories.filter(c => c.type === 'income')
 
   const navItems = [
     { id: 'profile' as TabType, label: 'Profile', icon: User },
@@ -390,25 +531,269 @@ export default function SettingsPage() {
             )}
 
             {activeTab === 'categories' && (
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="p-6 border-b border-slate-100">
-                  <h2 className="text-lg font-bold text-slate-800">Categories</h2>
-                  <p className="text-sm text-slate-500">Manage your income and expense categories</p>
-                </div>
-                <div className="p-12 flex flex-col items-center justify-center text-center">
-                  <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-                    <Layers size={32} className="text-slate-400" />
+              <div className="space-y-6">
+                {categoriesLoading ? (
+                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-12 flex items-center justify-center">
+                    <Loader2 size={32} className="animate-spin text-blue-600" />
                   </div>
-                  <h3 className="text-lg font-semibold text-slate-700 mb-2">Coming Soon</h3>
-                  <p className="text-slate-500 max-w-sm">
-                    Custom category management will be available in a future update. Stay tuned!
-                  </p>
-                </div>
+                ) : (
+                  <>
+                    {/* Expense Categories */}
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                      <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-rose-50 rounded-lg">
+                            <ArrowDownCircle size={20} className="text-rose-600" />
+                          </div>
+                          <div>
+                            <h2 className="text-lg font-bold text-slate-800">Expense Categories</h2>
+                            <p className="text-sm text-slate-500">{expenseCategories.length} categories</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => openAddCategoryModal('expense')}
+                          className="px-4 py-2 bg-rose-600 text-white text-sm font-medium rounded-lg hover:bg-rose-700 transition-colors flex items-center gap-2"
+                        >
+                          <Plus size={16} />
+                          Add
+                        </button>
+                      </div>
+                      <div className="p-4">
+                        {expenseCategories.length === 0 ? (
+                          <p className="text-center text-slate-500 py-8">No expense categories yet</p>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {expenseCategories.map((category) => {
+                              const colorStyle = getColorStyle(category.color)
+                              return (
+                                <div
+                                  key={category.id}
+                                  className="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-slate-200 transition-colors group"
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-10 h-10 rounded-full ${colorStyle.bg} ${colorStyle.text} flex items-center justify-center font-bold text-sm`}>
+                                      {category.name.charAt(0)}
+                                    </div>
+                                    <div>
+                                      <p className="font-medium text-slate-800">{category.name}</p>
+                                      <div className="flex items-center gap-2">
+                                        <span className={`w-2 h-2 rounded-full ${colorStyle.dot}`}></span>
+                                        <span className="text-xs text-slate-400 capitalize">{category.color}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button
+                                      onClick={() => openEditCategoryModal(category)}
+                                      className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                    >
+                                      <Pencil size={16} />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteCategory(category)}
+                                      className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                    >
+                                      <Trash2 size={16} />
+                                    </button>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Income Categories */}
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                      <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-emerald-50 rounded-lg">
+                            <ArrowUpCircle size={20} className="text-emerald-600" />
+                          </div>
+                          <div>
+                            <h2 className="text-lg font-bold text-slate-800">Income Categories</h2>
+                            <p className="text-sm text-slate-500">{incomeCategories.length} categories</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => openAddCategoryModal('income')}
+                          className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-2"
+                        >
+                          <Plus size={16} />
+                          Add
+                        </button>
+                      </div>
+                      <div className="p-4">
+                        {incomeCategories.length === 0 ? (
+                          <p className="text-center text-slate-500 py-8">No income categories yet</p>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {incomeCategories.map((category) => {
+                              const colorStyle = getColorStyle(category.color)
+                              return (
+                                <div
+                                  key={category.id}
+                                  className="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-slate-200 transition-colors group"
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-10 h-10 rounded-full ${colorStyle.bg} ${colorStyle.text} flex items-center justify-center font-bold text-sm`}>
+                                      {category.name.charAt(0)}
+                                    </div>
+                                    <div>
+                                      <p className="font-medium text-slate-800">{category.name}</p>
+                                      <div className="flex items-center gap-2">
+                                        <span className={`w-2 h-2 rounded-full ${colorStyle.dot}`}></span>
+                                        <span className="text-xs text-slate-400 capitalize">{category.color}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button
+                                      onClick={() => openEditCategoryModal(category)}
+                                      className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                    >
+                                      <Pencil size={16} />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteCategory(category)}
+                                      className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                    >
+                                      <Trash2 size={16} />
+                                    </button>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </main>
         </div>
       </div>
+
+      {/* Category Modal */}
+      {categoryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="font-bold text-lg text-slate-800">
+                {editingCategory ? 'Edit Category' : 'Add Category'}
+              </h3>
+              <button
+                onClick={() => setCategoryModal(false)}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleCategorySubmit} className="p-5 space-y-4">
+              {categoryError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-600 text-sm">
+                  {categoryError}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Category Name
+                </label>
+                <input
+                  type="text"
+                  value={categoryForm.name}
+                  onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
+                  required
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  placeholder="e.g., Groceries"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Type
+                </label>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setCategoryForm({ ...categoryForm, type: 'expense' })}
+                    disabled={!!editingCategory}
+                    className={`flex-1 py-3 rounded-lg font-medium transition-all ${
+                      categoryForm.type === 'expense'
+                        ? 'bg-rose-100 text-rose-700 border-2 border-rose-300'
+                        : 'bg-slate-50 text-slate-500 border-2 border-transparent hover:bg-slate-100'
+                    } ${editingCategory ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    Expense
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCategoryForm({ ...categoryForm, type: 'income' })}
+                    disabled={!!editingCategory}
+                    className={`flex-1 py-3 rounded-lg font-medium transition-all ${
+                      categoryForm.type === 'income'
+                        ? 'bg-emerald-100 text-emerald-700 border-2 border-emerald-300'
+                        : 'bg-slate-50 text-slate-500 border-2 border-transparent hover:bg-slate-100'
+                    } ${editingCategory ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    Income
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Color
+                </label>
+                <div className="grid grid-cols-5 gap-2">
+                  {CATEGORY_COLORS.map((color) => (
+                    <button
+                      key={color.name}
+                      type="button"
+                      onClick={() => setCategoryForm({ ...categoryForm, color: color.name })}
+                      className={`w-full aspect-square rounded-lg ${color.bg} ${color.text} flex items-center justify-center transition-all ${
+                        categoryForm.color === color.name
+                          ? 'ring-2 ring-offset-2 ring-blue-500 scale-110'
+                          : 'hover:scale-105'
+                      }`}
+                    >
+                      {categoryForm.color === color.name && <Check size={16} />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setCategoryModal(false)}
+                  className="flex-1 py-3 bg-slate-100 text-slate-700 font-medium rounded-lg hover:bg-slate-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={categorySaving}
+                  className="flex-1 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {categorySaving ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    editingCategory ? 'Update' : 'Add Category'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

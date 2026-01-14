@@ -67,6 +67,15 @@ interface DayDetail {
   expense: number
 }
 
+interface Category {
+  id: string
+  name: string
+  type: 'income' | 'expense'
+  color: string
+  isDefault: boolean
+  order: number
+}
+
 // --- Helper Functions ---
 const months = [
   "January", "February", "March", "April", "May", "June",
@@ -75,24 +84,28 @@ const months = [
 
 const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
-// Expense Categories
-const expenseCategories = [
-  { name: 'Housing', color: 'bg-indigo-100 text-indigo-700 border-indigo-200', dot: 'bg-indigo-500' },
-  { name: 'Food', color: 'bg-orange-100 text-orange-700 border-orange-200', dot: 'bg-orange-500' },
-  { name: 'Transport', color: 'bg-amber-100 text-amber-800 border-amber-200', dot: 'bg-amber-500' },
-  { name: 'Utilities', color: 'bg-cyan-100 text-cyan-700 border-cyan-200', dot: 'bg-cyan-500' },
-  { name: 'Entertainment', color: 'bg-rose-100 text-rose-700 border-rose-200', dot: 'bg-rose-500' },
-  { name: 'Other', color: 'bg-slate-100 text-slate-700 border-slate-200', dot: 'bg-slate-500' },
-]
+// Color mapping for dynamic category colors
+const colorMap: Record<string, { color: string; dot: string }> = {
+  indigo: { color: 'bg-indigo-100 text-indigo-700 border-indigo-200', dot: 'bg-indigo-500' },
+  emerald: { color: 'bg-emerald-100 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' },
+  rose: { color: 'bg-rose-100 text-rose-700 border-rose-200', dot: 'bg-rose-500' },
+  orange: { color: 'bg-orange-100 text-orange-700 border-orange-200', dot: 'bg-orange-500' },
+  amber: { color: 'bg-amber-100 text-amber-700 border-amber-200', dot: 'bg-amber-500' },
+  cyan: { color: 'bg-cyan-100 text-cyan-700 border-cyan-200', dot: 'bg-cyan-500' },
+  teal: { color: 'bg-teal-100 text-teal-700 border-teal-200', dot: 'bg-teal-500' },
+  green: { color: 'bg-green-100 text-green-700 border-green-200', dot: 'bg-green-500' },
+  lime: { color: 'bg-lime-100 text-lime-700 border-lime-200', dot: 'bg-lime-500' },
+  purple: { color: 'bg-purple-100 text-purple-700 border-purple-200', dot: 'bg-purple-500' },
+  pink: { color: 'bg-pink-100 text-pink-700 border-pink-200', dot: 'bg-pink-500' },
+  slate: { color: 'bg-slate-100 text-slate-700 border-slate-200', dot: 'bg-slate-500' },
+  gray: { color: 'bg-gray-100 text-gray-700 border-gray-200', dot: 'bg-gray-500' },
+  red: { color: 'bg-red-100 text-red-700 border-red-200', dot: 'bg-red-500' },
+  blue: { color: 'bg-blue-100 text-blue-700 border-blue-200', dot: 'bg-blue-500' },
+}
 
-// Income Categories
-const incomeCategories = [
-  { name: 'Salary', color: 'bg-emerald-100 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' },
-  { name: 'Business', color: 'bg-teal-100 text-teal-700 border-teal-200', dot: 'bg-teal-500' },
-  { name: 'Freelance', color: 'bg-green-100 text-green-700 border-green-200', dot: 'bg-green-500' },
-  { name: 'Investment', color: 'bg-lime-100 text-lime-700 border-lime-200', dot: 'bg-lime-500' },
-  { name: 'Other', color: 'bg-gray-100 text-gray-700 border-gray-200', dot: 'bg-gray-500' },
-]
+const getColorFromName = (colorName: string) => {
+  return colorMap[colorName] || colorMap.slate
+}
 
 const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate()
 const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay()
@@ -123,6 +136,7 @@ export default function BudgetPlanner() {
   const [selectedDayDetail, setSelectedDayDetail] = useState<DayDetail | null>(null)
   const [user, setUser] = useState<AuthUser | null>(null)
   const [authChecked, setAuthChecked] = useState(false)
+  const [categories, setCategories] = useState<Category[]>([])
 
   // Edit State
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -132,7 +146,7 @@ export default function BudgetPlanner() {
     type: 'expense',
     name: '',
     amount: '',
-    category: 'Other',
+    category: '',
     frequency: 'one-time',
     startDate: formatDate(new Date(2026, 0, 1)),
     endDate: '',
@@ -174,11 +188,33 @@ export default function BudgetPlanner() {
     }
   }, [])
 
+  const fetchCategories = useCallback(async () => {
+    try {
+      const response = await fetch('/api/categories')
+      if (response.ok) {
+        const data = await response.json()
+        setCategories(data)
+
+        // If no categories exist, seed default ones
+        if (data.length === 0) {
+          const seedResponse = await fetch('/api/categories/seed', { method: 'POST' })
+          if (seedResponse.ok) {
+            const seededData = await seedResponse.json()
+            setCategories(seededData)
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error)
+    }
+  }, [])
+
   useEffect(() => {
     if (user) {
       fetchItems()
+      fetchCategories()
     }
-  }, [fetchItems, user])
+  }, [fetchItems, fetchCategories, user])
 
   const handleLogout = async () => {
     try {
@@ -369,9 +405,9 @@ export default function BudgetPlanner() {
     const expenseByCategory: Record<string, number> = {}
     const incomeByCategory: Record<string, number> = {}
 
-    // Initialize all categories with 0
-    expenseCategories.forEach(cat => { expenseByCategory[cat.name] = 0 })
-    incomeCategories.forEach(cat => { incomeByCategory[cat.name] = 0 })
+    // Initialize all categories with 0 from dynamic categories
+    categories.filter(c => c.type === 'expense').forEach(cat => { expenseByCategory[cat.name] = 0 })
+    categories.filter(c => c.type === 'income').forEach(cat => { incomeByCategory[cat.name] = 0 })
 
     // Calculate totals for each day in the month
     for (let d = 1; d <= daysInMonth; d++) {
@@ -402,14 +438,16 @@ export default function BudgetPlanner() {
     const totalIncome = incomeBreakdown.reduce((sum, item) => sum + item.amount, 0)
 
     return { expenseBreakdown, incomeBreakdown, totalExpense, totalIncome }
-  }, [currentDate, getItemsForDate])
+  }, [currentDate, getItemsForDate, categories])
 
   // Helper to get color style based on category & type
   const getCategoryStyle = (catName: string, type: string) => {
-    if (type === 'income') {
-      return incomeCategories.find(c => c.name === catName) || incomeCategories[4]
+    const cat = categories.find(c => c.name === catName && c.type === type)
+    if (cat) {
+      return getColorFromName(cat.color)
     }
-    return expenseCategories.find(c => c.name === catName) || expenseCategories[5]
+    // Default fallback
+    return type === 'income' ? getColorFromName('emerald') : getColorFromName('slate')
   }
 
   const renderCalendarCells = () => {
@@ -916,7 +954,8 @@ export default function BudgetPlanner() {
               ) : (
                 <div className="space-y-4">
                   {categoryBreakdown.expenseBreakdown.map((item, index) => {
-                    const catStyle = expenseCategories.find(c => c.name === item.category) || expenseCategories[5]
+                    const cat = categories.find(c => c.name === item.category && c.type === 'expense')
+                    const catStyle = cat ? getColorFromName(cat.color) : getColorFromName('slate')
                     const percentage = categoryBreakdown.totalExpense > 0
                       ? (item.amount / categoryBreakdown.totalExpense) * 100
                       : 0
