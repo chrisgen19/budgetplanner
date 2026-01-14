@@ -21,7 +21,9 @@ import {
   LogOut,
   User,
   DollarSign,
-  Target
+  Target,
+  BarChart3,
+  Layers
 } from 'lucide-react'
 
 interface AuthUser {
@@ -355,6 +357,50 @@ export default function BudgetPlanner() {
   const yearlyIncome = monthlyStats.income.reduce((sum, val) => sum + val, 0)
   const yearlyExpense = monthlyStats.expense.reduce((sum, val) => sum + val, 0)
   const yearlySavings = yearlyIncome - yearlyExpense
+
+  // Category breakdown for the current month
+  const categoryBreakdown = useMemo(() => {
+    const year = currentDate.getFullYear()
+    const month = currentDate.getMonth()
+    const daysInMonth = getDaysInMonth(year, month)
+
+    const expenseByCategory: Record<string, number> = {}
+    const incomeByCategory: Record<string, number> = {}
+
+    // Initialize all categories with 0
+    expenseCategories.forEach(cat => { expenseByCategory[cat.name] = 0 })
+    incomeCategories.forEach(cat => { incomeByCategory[cat.name] = 0 })
+
+    // Calculate totals for each day in the month
+    for (let d = 1; d <= daysInMonth; d++) {
+      const currentDateIter = new Date(year, month, d)
+      const dayItems = getItemsForDate(currentDateIter)
+
+      dayItems.forEach(item => {
+        if (item.type === 'expense') {
+          expenseByCategory[item.category] = (expenseByCategory[item.category] || 0) + item.amount
+        } else {
+          incomeByCategory[item.category] = (incomeByCategory[item.category] || 0) + item.amount
+        }
+      })
+    }
+
+    // Convert to arrays and sort by amount (highest first)
+    const expenseBreakdown = Object.entries(expenseByCategory)
+      .map(([category, amount]) => ({ category, amount }))
+      .filter(item => item.amount > 0)
+      .sort((a, b) => b.amount - a.amount)
+
+    const incomeBreakdown = Object.entries(incomeByCategory)
+      .map(([category, amount]) => ({ category, amount }))
+      .filter(item => item.amount > 0)
+      .sort((a, b) => b.amount - a.amount)
+
+    const totalExpense = expenseBreakdown.reduce((sum, item) => sum + item.amount, 0)
+    const totalIncome = incomeBreakdown.reduce((sum, item) => sum + item.amount, 0)
+
+    return { expenseBreakdown, incomeBreakdown, totalExpense, totalIncome }
+  }, [currentDate, getItemsForDate])
 
   // Helper to get color style based on category & type
   const getCategoryStyle = (catName: string, type: string) => {
@@ -833,6 +879,165 @@ export default function BudgetPlanner() {
             </table>
           </div>
         </div>
+
+        {/* Category Breakdown Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Expense Breakdown */}
+          <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-rose-50 rounded-lg text-rose-600">
+                  <BarChart3 size={20} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800">Expense Breakdown</h3>
+                  <p className="text-xs text-slate-500 font-medium">{months[currentDate.getMonth()]} spending by category</p>
+                </div>
+              </div>
+              <span className="px-3 py-1 bg-rose-100 text-rose-600 rounded-full text-xs font-bold">
+                {formatCurrency(categoryBreakdown.totalExpense)}
+              </span>
+            </div>
+            <div className="p-6">
+              {categoryBreakdown.expenseBreakdown.length === 0 ? (
+                <div className="flex flex-col items-center gap-3 text-slate-400 py-8">
+                  <Wallet size={40} className="text-slate-200" strokeWidth={1}/>
+                  <p className="text-sm">No expenses this month</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {categoryBreakdown.expenseBreakdown.map((item, index) => {
+                    const catStyle = expenseCategories.find(c => c.name === item.category) || expenseCategories[5]
+                    const percentage = categoryBreakdown.totalExpense > 0
+                      ? (item.amount / categoryBreakdown.totalExpense) * 100
+                      : 0
+                    return (
+                      <div key={item.category} className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <span className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${catStyle.color}`}>
+                              {index + 1}
+                            </span>
+                            <div>
+                              <p className="font-semibold text-slate-800">{item.category}</p>
+                              <p className="text-xs text-slate-400">{percentage.toFixed(1)}% of total</p>
+                            </div>
+                          </div>
+                          <span className="font-bold text-slate-900 font-mono">{formatCurrency(item.amount)}</span>
+                        </div>
+                        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${catStyle.dot}`}
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Income Breakdown */}
+          <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600">
+                  <Layers size={20} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800">Income Breakdown</h3>
+                  <p className="text-xs text-slate-500 font-medium">{months[currentDate.getMonth()]} earnings by source</p>
+                </div>
+              </div>
+              <span className="px-3 py-1 bg-emerald-100 text-emerald-600 rounded-full text-xs font-bold">
+                {formatCurrency(categoryBreakdown.totalIncome)}
+              </span>
+            </div>
+            <div className="p-6">
+              {categoryBreakdown.incomeBreakdown.length === 0 ? (
+                <div className="flex flex-col items-center gap-3 text-slate-400 py-8">
+                  <Wallet size={40} className="text-slate-200" strokeWidth={1}/>
+                  <p className="text-sm">No income this month</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {categoryBreakdown.incomeBreakdown.map((item, index) => {
+                    const catStyle = incomeCategories.find(c => c.name === item.category) || incomeCategories[4]
+                    const percentage = categoryBreakdown.totalIncome > 0
+                      ? (item.amount / categoryBreakdown.totalIncome) * 100
+                      : 0
+                    return (
+                      <div key={item.category} className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <span className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${catStyle.color}`}>
+                              {index + 1}
+                            </span>
+                            <div>
+                              <p className="font-semibold text-slate-800">{item.category}</p>
+                              <p className="text-xs text-slate-400">{percentage.toFixed(1)}% of total</p>
+                            </div>
+                          </div>
+                          <span className="font-bold text-emerald-600 font-mono">{formatCurrency(item.amount)}</span>
+                        </div>
+                        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${catStyle.dot}`}
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Savings Rate Card */}
+        {(categoryBreakdown.totalIncome > 0 || categoryBreakdown.totalExpense > 0) && (
+          <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-3xl shadow-lg p-6 text-white">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-white/10 rounded-2xl">
+                  <PiggyBank size={28} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold">Monthly Savings Rate</h3>
+                  <p className="text-slate-400 text-sm">{months[currentDate.getMonth()]} financial health indicator</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-6">
+                <div className="text-center">
+                  <p className="text-2xl font-bold">
+                    {categoryBreakdown.totalIncome > 0
+                      ? ((categoryBreakdown.totalIncome - categoryBreakdown.totalExpense) / categoryBreakdown.totalIncome * 100).toFixed(1)
+                      : '0.0'
+                    }%
+                  </p>
+                  <p className="text-xs text-slate-400">Savings Rate</p>
+                </div>
+                <div className="h-12 w-px bg-slate-700"></div>
+                <div className="text-center">
+                  <p className={`text-2xl font-bold ${currentMonthSavings >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {formatCurrency(currentMonthSavings)}
+                  </p>
+                  <p className="text-xs text-slate-400">{currentMonthSavings >= 0 ? 'Net Savings' : 'Deficit'}</p>
+                </div>
+                <div className="h-12 w-px bg-slate-700 hidden md:block"></div>
+                <div className="text-center hidden md:block">
+                  <p className="text-2xl font-bold text-amber-400">
+                    {categoryBreakdown.expenseBreakdown[0]?.category || 'N/A'}
+                  </p>
+                  <p className="text-xs text-slate-400">Top Expense</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Footer Credit */}
         <div className="text-center text-slate-300 text-xs py-4 font-medium">
