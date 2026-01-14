@@ -5,7 +5,9 @@
       "Bash(bunx create-next-app@latest:*)",
       "Bash(bun:*)",
       "Bash(bunx prisma:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(npx tsc:*)",
+      "Bash(DATABASE_URL=\"postgres://postgres:31Ix8NcfXRtn03mgXgqKNdvSSiBb8N2Mjx6bhabq8sXmosPOCE5QfKEl1LQ96N0H@72.61.113.145:5432/budgetplanner\" bunx prisma migrate:*)"
     ],
     "additionalDirectories": [
       "d:\\proj\\budgetplanner"

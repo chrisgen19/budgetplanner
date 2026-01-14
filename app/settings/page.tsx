@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -11,7 +11,11 @@ import {
   EyeOff,
   Loader2,
   Check,
-  Wallet
+  Wallet,
+  Plus,
+  Pencil,
+  Trash2,
+  X
 } from 'lucide-react'
 
 interface AuthUser {
@@ -20,7 +24,33 @@ interface AuthUser {
   name: string
 }
 
+interface Category {
+  id: string
+  name: string
+  type: 'income' | 'expense'
+  color: string
+  isDefault: boolean
+  order: number
+}
+
 type TabType = 'profile' | 'categories'
+
+const COLORS = [
+  { name: 'indigo', bg: 'bg-indigo-500' },
+  { name: 'emerald', bg: 'bg-emerald-500' },
+  { name: 'rose', bg: 'bg-rose-500' },
+  { name: 'orange', bg: 'bg-orange-500' },
+  { name: 'amber', bg: 'bg-amber-500' },
+  { name: 'cyan', bg: 'bg-cyan-500' },
+  { name: 'teal', bg: 'bg-teal-500' },
+  { name: 'green', bg: 'bg-green-500' },
+  { name: 'lime', bg: 'bg-lime-500' },
+  { name: 'purple', bg: 'bg-purple-500' },
+  { name: 'pink', bg: 'bg-pink-500' },
+  { name: 'slate', bg: 'bg-slate-500' },
+  { name: 'blue', bg: 'bg-blue-500' },
+  { name: 'red', bg: 'bg-red-500' },
+]
 
 export default function SettingsPage() {
   const router = useRouter()
@@ -48,6 +78,19 @@ export default function SettingsPage() {
   const [profileError, setProfileError] = useState('')
   const [passwordError, setPasswordError] = useState('')
 
+  // Categories state
+  const [categories, setCategories] = useState<Category[]>([])
+  const [categoriesLoading, setCategoriesLoading] = useState(false)
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false)
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null)
+  const [categoryForm, setCategoryForm] = useState({
+    name: '',
+    type: 'expense' as 'income' | 'expense',
+    color: 'indigo',
+  })
+  const [categoryLoading, setCategoryLoading] = useState(false)
+  const [categoryError, setCategoryError] = useState('')
+
   // Auth check
   useEffect(() => {
     const checkAuth = async () => {
@@ -71,6 +114,37 @@ export default function SettingsPage() {
     }
     checkAuth()
   }, [router])
+
+  // Fetch categories
+  const fetchCategories = useCallback(async () => {
+    setCategoriesLoading(true)
+    try {
+      const response = await fetch('/api/categories')
+      if (response.ok) {
+        const data = await response.json()
+        setCategories(data)
+
+        // Seed default categories if empty
+        if (data.length === 0) {
+          const seedResponse = await fetch('/api/categories/seed', { method: 'POST' })
+          if (seedResponse.ok) {
+            const seededData = await seedResponse.json()
+            setCategories(seededData)
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error)
+    } finally {
+      setCategoriesLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (user && activeTab === 'categories') {
+      fetchCategories()
+    }
+  }, [user, activeTab, fetchCategories])
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -151,6 +225,74 @@ export default function SettingsPage() {
     }
   }
 
+  const openAddCategoryModal = (type: 'income' | 'expense') => {
+    setEditingCategory(null)
+    setCategoryForm({ name: '', type, color: type === 'income' ? 'emerald' : 'indigo' })
+    setCategoryError('')
+    setCategoryModalOpen(true)
+  }
+
+  const openEditCategoryModal = (category: Category) => {
+    setEditingCategory(category)
+    setCategoryForm({ name: category.name, type: category.type, color: category.color })
+    setCategoryError('')
+    setCategoryModalOpen(true)
+  }
+
+  const handleCategorySubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setCategoryError('')
+    setCategoryLoading(true)
+
+    try {
+      if (editingCategory) {
+        // Update existing
+        const response = await fetch(`/api/categories/${editingCategory.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: categoryForm.name, color: categoryForm.color }),
+        })
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Failed to update category')
+        }
+      } else {
+        // Create new
+        const response = await fetch('/api/categories', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(categoryForm),
+        })
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Failed to create category')
+        }
+      }
+
+      setCategoryModalOpen(false)
+      fetchCategories()
+    } catch (err) {
+      setCategoryError(err instanceof Error ? err.message : 'Failed to save category')
+    } finally {
+      setCategoryLoading(false)
+    }
+  }
+
+  const handleDeleteCategory = async (categoryId: string) => {
+    if (!confirm('Are you sure you want to delete this category?')) return
+
+    try {
+      const response = await fetch(`/api/categories/${categoryId}`, { method: 'DELETE' })
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to delete category')
+      }
+      fetchCategories()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete category')
+    }
+  }
+
   if (!authChecked || !user) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -163,6 +305,13 @@ export default function SettingsPage() {
     { id: 'profile' as TabType, label: 'Profile', icon: User },
     { id: 'categories' as TabType, label: 'Categories', icon: Layers },
   ]
+
+  const expenseCategories = categories.filter(c => c.type === 'expense').sort((a, b) => a.order - b.order)
+  const incomeCategories = categories.filter(c => c.type === 'income').sort((a, b) => a.order - b.order)
+
+  const getColorBg = (colorName: string) => {
+    return COLORS.find(c => c.name === colorName)?.bg || 'bg-slate-500'
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -390,25 +539,192 @@ export default function SettingsPage() {
             )}
 
             {activeTab === 'categories' && (
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="p-6 border-b border-slate-100">
-                  <h2 className="text-lg font-bold text-slate-800">Categories</h2>
-                  <p className="text-sm text-slate-500">Manage your income and expense categories</p>
-                </div>
-                <div className="p-12 flex flex-col items-center justify-center text-center">
-                  <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-                    <Layers size={32} className="text-slate-400" />
+              <div className="space-y-6">
+                {categoriesLoading ? (
+                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-12 flex items-center justify-center">
+                    <Loader2 size={32} className="animate-spin text-blue-600" />
                   </div>
-                  <h3 className="text-lg font-semibold text-slate-700 mb-2">Coming Soon</h3>
-                  <p className="text-slate-500 max-w-sm">
-                    Custom category management will be available in a future update. Stay tuned!
-                  </p>
-                </div>
+                ) : (
+                  <>
+                    {/* Expense Categories */}
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                      <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                        <div>
+                          <h2 className="text-lg font-bold text-slate-800">Expense Categories</h2>
+                          <p className="text-sm text-slate-500">Categories for tracking expenses</p>
+                        </div>
+                        <button
+                          onClick={() => openAddCategoryModal('expense')}
+                          className="flex items-center gap-2 px-4 py-2 bg-rose-50 text-rose-600 font-medium rounded-lg hover:bg-rose-100 transition-colors"
+                        >
+                          <Plus size={18} />
+                          Add Category
+                        </button>
+                      </div>
+                      <div className="divide-y divide-slate-100">
+                        {expenseCategories.length === 0 ? (
+                          <div className="p-8 text-center text-slate-500">No expense categories yet</div>
+                        ) : (
+                          expenseCategories.map((category) => (
+                            <div key={category.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-4 h-4 rounded-full ${getColorBg(category.color)}`} />
+                                <span className="font-medium text-slate-700">{category.name}</span>
+                                {category.isDefault && (
+                                  <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">Default</span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => openEditCategoryModal(category)}
+                                  className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                >
+                                  <Pencil size={16} />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteCategory(category.id)}
+                                  className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Income Categories */}
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                      <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                        <div>
+                          <h2 className="text-lg font-bold text-slate-800">Income Categories</h2>
+                          <p className="text-sm text-slate-500">Categories for tracking income</p>
+                        </div>
+                        <button
+                          onClick={() => openAddCategoryModal('income')}
+                          className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 font-medium rounded-lg hover:bg-emerald-100 transition-colors"
+                        >
+                          <Plus size={18} />
+                          Add Category
+                        </button>
+                      </div>
+                      <div className="divide-y divide-slate-100">
+                        {incomeCategories.length === 0 ? (
+                          <div className="p-8 text-center text-slate-500">No income categories yet</div>
+                        ) : (
+                          incomeCategories.map((category) => (
+                            <div key={category.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-4 h-4 rounded-full ${getColorBg(category.color)}`} />
+                                <span className="font-medium text-slate-700">{category.name}</span>
+                                {category.isDefault && (
+                                  <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">Default</span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => openEditCategoryModal(category)}
+                                  className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                >
+                                  <Pencil size={16} />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteCategory(category.id)}
+                                  className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </main>
         </div>
       </div>
+
+      {/* Category Modal */}
+      {categoryModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="font-bold text-lg text-slate-800">
+                {editingCategory ? 'Edit Category' : 'Add Category'}
+              </h3>
+              <button
+                onClick={() => setCategoryModalOpen(false)}
+                className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleCategorySubmit} className="p-6 space-y-4">
+              {categoryError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-600 text-sm">
+                  {categoryError}
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Category Name</label>
+                <input
+                  type="text"
+                  value={categoryForm.name}
+                  onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
+                  required
+                  placeholder="e.g. Groceries, Rent, etc."
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Color</label>
+                <div className="flex flex-wrap gap-2">
+                  {COLORS.map((color) => (
+                    <button
+                      key={color.name}
+                      type="button"
+                      onClick={() => setCategoryForm({ ...categoryForm, color: color.name })}
+                      className={`w-8 h-8 rounded-full ${color.bg} transition-all ${
+                        categoryForm.color === color.name
+                          ? 'ring-2 ring-offset-2 ring-blue-500 scale-110'
+                          : 'hover:scale-110'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setCategoryModalOpen(false)}
+                  className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={categoryLoading}
+                  className="flex-1 px-4 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {categoryLoading ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Save'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

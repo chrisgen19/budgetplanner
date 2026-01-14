@@ -21,6 +21,23 @@ model User {
   updatedAt    DateTime     @updatedAt
   budgetItems  BudgetItem[]
   sessions     Session[]
+  categories   Category[]
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  name      String
+  type      String   // "income" | "expense"
+  color     String   // Tailwind color class e.g. "indigo", "emerald"
+  isDefault Boolean  @default(false)
+  order     Int      @default(0)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, name, type])
+  @@index([userId])
 }
 
 model Session {
