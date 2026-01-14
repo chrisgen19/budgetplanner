@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   ChevronLeft,
   ChevronRight,
@@ -15,8 +16,16 @@ import {
   Wallet,
   ArrowDownCircle,
   ArrowUpCircle,
-  PiggyBank
+  PiggyBank,
+  LogOut,
+  User
 } from 'lucide-react'
+
+interface AuthUser {
+  id: string
+  email: string
+  name: string
+}
 
 // --- Types ---
 interface BudgetItem {
@@ -99,11 +108,14 @@ const formatCurrency = (amount: number) => {
 
 // --- Main Component ---
 export default function BudgetPlanner() {
+  const router = useRouter()
   const [currentDate, setCurrentDate] = useState(new Date(2026, 0, 1))
   const [items, setItems] = useState<BudgetItem[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [selectedDayDetail, setSelectedDayDetail] = useState<DayDetail | null>(null)
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [authChecked, setAuthChecked] = useState(false)
 
   // Edit State
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -119,6 +131,26 @@ export default function BudgetPlanner() {
     endDate: '',
     selectedDays: [],
   })
+
+  // --- Auth Check ---
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const response = await fetch('/api/auth/me')
+        const data = await response.json()
+        if (data.user) {
+          setUser(data.user)
+        } else {
+          router.push('/login')
+        }
+      } catch {
+        router.push('/login')
+      } finally {
+        setAuthChecked(true)
+      }
+    }
+    checkAuth()
+  }, [router])
 
   // --- Data Fetching ---
   const fetchItems = useCallback(async () => {
@@ -136,8 +168,19 @@ export default function BudgetPlanner() {
   }, [])
 
   useEffect(() => {
-    fetchItems()
-  }, [fetchItems])
+    if (user) {
+      fetchItems()
+    }
+  }, [fetchItems, user])
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+      router.push('/login')
+    } catch (error) {
+      console.error('Logout error:', error)
+    }
+  }
 
   // --- Handlers ---
   const handlePrevMonth = () => {
@@ -393,6 +436,15 @@ export default function BudgetPlanner() {
     return cells
   }
 
+  // Don't render until auth is checked
+  if (!authChecked || !user) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-20 selection:bg-blue-100">
 
@@ -408,13 +460,28 @@ export default function BudgetPlanner() {
               <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">2026 Edition</p>
             </div>
           </div>
-          <button
-            onClick={handleOpenAddModal}
-            className="bg-gray-900 hover:bg-black text-white px-5 py-2.5 rounded-full text-sm font-semibold flex items-center gap-2 transition-all shadow-md hover:shadow-lg active:scale-95"
-          >
-            <Plus size={18} />
-            <span className="hidden sm:inline">New Transaction</span>
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleOpenAddModal}
+              className="bg-gray-900 hover:bg-black text-white px-5 py-2.5 rounded-full text-sm font-semibold flex items-center gap-2 transition-all shadow-md hover:shadow-lg active:scale-95"
+            >
+              <Plus size={18} />
+              <span className="hidden sm:inline">New Transaction</span>
+            </button>
+            <div className="flex items-center gap-2 pl-3 border-l border-slate-200">
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-full">
+                <User size={16} className="text-slate-500" />
+                <span className="text-sm font-medium text-slate-700">{user.name}</span>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-colors"
+                title="Sign out"
+              >
+                <LogOut size={18} />
+              </button>
+            </div>
+          </div>
         </div>
       </nav>
 

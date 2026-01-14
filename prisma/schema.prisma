@@ -13,6 +13,29 @@ datasource db {
   provider = "postgresql"
 }
 
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  budgetItems  BudgetItem[]
+  sessions     Session[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}
+
 model BudgetItem {
   id           String   @id @default(cuid())
   type         String   // "income" | "expense"
@@ -25,4 +48,8 @@ model BudgetItem {
   selectedDays Int[]    // For weekly frequency (0-6 for Sun-Sat)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

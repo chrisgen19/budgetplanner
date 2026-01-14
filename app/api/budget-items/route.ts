@@ -1,9 +1,16 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/app/lib/prisma'
+import { getCurrentUser } from '@/app/lib/auth'
 
 export async function GET() {
   try {
+    const session = await getCurrentUser()
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const items = await prisma.budgetItem.findMany({
+      where: { userId: session.user.id },
       orderBy: { createdAt: 'desc' }
     })
     return NextResponse.json(items)
@@ -15,6 +22,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const session = await getCurrentUser()
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const body = await request.json()
 
     const item = await prisma.budgetItem.create({
@@ -27,6 +39,7 @@ export async function POST(request: Request) {
         startDate: body.startDate,
         endDate: body.endDate || null,
         selectedDays: body.selectedDays || [],
+        userId: session.user.id,
       }
     })
 
